@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>English Bloom Interactive</title>
+<style>
+body { font-family: Arial, sans-serif; background:#f0f0f0; margin:0; padding:0;}
+header { background:#4CAF50; color:white; padding:15px; text-align:center; }
+header a { color:white; text-decoration:none; font-weight:bold; }
+button { padding:10px 20px; margin:5px; cursor:pointer; transition:0.3s; border:none; border-radius:5px;}
+button:hover { background:#45a049; color:white; }
+.login-section, .admin-panel, .quiz-section, .modal-section { background:white; margin:20px auto; padding:20px; border-radius:10px; max-width:700px; box-shadow:0 0 15px rgba(0,0,0,0.1);}
+h2,h3 { text-align:center; }
+input, select { padding:8px; margin:5px 0; width:100%; box-sizing:border-box; }
+.quiz-question, .modal-question { margin:10px 0; }
+.correct { color:green; font-weight:bold; }
+.incorrect { color:red; font-weight:bold; }
+footer { text-align:center; padding:15px; background:#222; color:white; }
+.note { background:#fffae6; padding:10px; border-left:5px solid #ff9900; margin-bottom:15px; }
+.option-btn { display:block; margin:5px 0; padding:8px; width:100%; border:1px solid #ccc; border-radius:5px; cursor:pointer; text-align:left;}
+.option-btn:hover { background:#f0f0f0; }
+</style>
+</head>
+<body>
+
+<header>
+<h1>English Bloom Interactive</h1>
+<p>Created by Rahul | <a href="https://www.facebook.com/yourfb" target="_blank">My Facebook</a></p>
+</header>
+
+<div class="login-section">
+<h2>Login</h2>
+<button onclick="showLogin('student')">Student Login</button>
+<button onclick="showLogin('admin')">Admin Login</button>
+<div id="loginForm" style="display:none;">
+<input type="text" id="username" placeholder="Username">
+<input type="password" id="password" placeholder="Password">
+<button onclick="login()">Login</button>
+</div>
+</div>
+
+<div class="admin-panel" id="adminPanel" style="display:none;">
+<h2>Admin Panel</h2>
+<div class="note">Add/Delete Students and Manage Quizzes</div>
+
+<h3>Add Student</h3>
+<input type="text" id="newUser" placeholder="Username">
+<input type="password" id="newPass" placeholder="Password">
+<button onclick="addUser()">Add Student</button>
+
+<h3>Existing Students</h3>
+<ul id="userList"></ul>
+
+<h3>Quizzes</h3>
+<ul id="quizList"></ul>
+
+<h3>Add New Quiz Question</h3>
+<input type="text" id="newQuestionText" placeholder="Question text">
+<input type="text" id="newQuestionAnswer" placeholder="Answer">
+<input type="text" id="newOption1" placeholder="Option 1">
+<input type="text" id="newOption2" placeholder="Option 2">
+<input type="text" id="newOption3" placeholder="Option 3">
+<input type="text" id="newOption4" placeholder="Option 4">
+<select id="newQuestionCategory">
+<option value="Changing Sentences">Changing Sentences</option>
+<option value="Tag Questions">Tag Questions</option>
+<option value="Modal Questions">Modal Questions</option>
+</select>
+<button onclick="addQuizQuestion()">Add Quiz</button>
+
+<h3>Gemini AI English Helper</h3>
+<input type="text" id="aiQuestion" placeholder="Ask anything">
+<button onclick="askGemini()">Ask AI</button>
+<p id="aiAnswer"></p>
+</div>
+
+<div class="quiz-section" id="quizSection" style="display:none;">
+<h2 id="greeting">Take Quiz</h2>
+<div id="quizContainer"></div>
+<p id="scoreDisplay"></p>
+
+<h3>Change Password</h3>
+<input type="password" id="newStudentPass" placeholder="Enter new password">
+<button onclick="changePassword()">Update Password</button>
+<p id="passChangeMsg"></p>
+</div>
+
+<div class="modal-section" id="modalSection" style="display:none;">
+<h2>Modal Questions</h2>
+<div id="modalContainer"></div>
+</div>
+
+<footer>
+<p>Created by Rahul | <a href="https://www.facebook.com/yourfb" target="_blank">My FB</a></p>
+<p>Contact me to make your website free!</p>
+</footer>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<script>
+// Firebase Config
+const firebaseConfig = {
+  apiKey: "AIzaSyB-98dmLpIAOg2bSDY5n0tSJbt8lpJxCnE",
+  authDomain: "english-bloomm-41bd9.firebaseapp.com",
+  projectId: "english-bloomm-41bd9",
+  storageBucket: "english-bloomm-41bd9.firebasestorage.app",
+  messagingSenderId: "431799637816",
+  appId: "1:431799637816:web:37b830128b694cfa89d3cd",
+  measurementId: "G-B3CYM6NZRV"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+// Admin Credentials
+const adminEmail = "ff4572659@gmail.com";
+const adminPass = "rah28hul";
+
+// Gemini API Key
+const GEMINI_API_KEY = "AIzaSyAdmyTR2AzXsbTV4NUbB72YDcOozB0XhtU";
+
+// Users array (admin + students)
+let users = [
+{username:"admin", password:"rah28hul", type:"admin", email:adminEmail},
+// Students will be added here via admin panel
+];
+
+// Preloaded 50 MCQs
+let quizzes = [
+{
+category:"Changing Sentences",
+questions:[
+{question:"Hasan Sir is playing football. Convert to negative.", answer:"Hasan Sir is not playing football", options:["Hasan Sir is playing football","Hasan Sir is not playing football","Has Hasan Sir playing football","Has Hasan Sir not playing football"]},
+{question:"Momo went to the market. Make it interrogative.", answer:"Did Momo go to the market?", options:["Momo went to the market?","Did Momo went to the market?","Did Momo go to the market?","Momo do go to the market?"]},
+{question:"Prionti is reading a book.", answer:"Prionti is not reading a book", options:["Prionti is reading a book","Prionti is not reading a book","Is Prionti reading a book","Prionti not reading a book"]},
+{question:"Rahul plays cricket every Sunday.", answer:"Rahul does not play cricket every Sunday", options:["Rahul plays cricket every Sunday","Rahul does not play cricket every Sunday","Does Rahul play cricket?","Rahul not play cricket"]},
+{question:"Ayat likes to sing.", answer:"Ayat does not like to sing", options:["Ayat likes to sing","Ayat does not like to sing","Ayat not like singing","Does Ayat like singing?"]},
+{question:"Sakib can solve the problem.", answer:"Sakib cannot solve the problem", options:["Sakib can solve the problem","Sakib cannot solve the problem","Can Sakib solve the problem?","Sakib not can solve the problem"]},
+{question:"Mrittika was late to school.", answer:"Mrittika was not late to school", options:["Mrittika was late to school","Mrittika was not late to school","Was Mrittika late to school?","Mrittika not was late"]},
+{question:"Maida is writing a letter.", answer:"Maida is not writing a letter", options:["Maida is writing a letter","Maida is not writing a letter","Is Maida writing a letter?","Maida writing letter"]},
+{question:"Hasan Sir will come tomorrow.", answer:"Hasan Sir will not come tomorrow", options:["Hasan Sir will come tomorrow","Hasan Sir will not come tomorrow","Will Hasan Sir come tomorrow?","Hasan Sir not will come tomorrow"]},
+{question:"Momo has eaten breakfast.", answer:"Momo has not eaten breakfast", options:["Momo has eaten breakfast","Momo has not eaten breakfast","Has Momo eaten breakfast?","Momo not eaten breakfast"]},
+{question:"Prionti is playing guitar.", answer:"Prionti is not playing guitar", options:["Prionti is playing guitar","Prionti is not playing guitar","Is Prionti playing guitar?","Prionti not playing guitar"]},
+{question:"Rahul was reading yesterday.", answer:"Rahul was not reading yesterday", options:["Rahul was reading yesterday","Rahul was not reading yesterday","Was Rahul reading yesterday?","Rahul not reading yesterday"]},
+{question:"Ayat will join the class.", answer:"Ayat will not join the class", options:["Ayat will join the class","Ayat will not join the class","Will Ayat join the class?","Ayat not join the class"]},
+{question:"Sakib is helping his friend.", answer:"Sakib is not helping his friend", options:["Sakib is helping his friend","Sakib is not helping his friend","Is Sakib helping his friend?","Sakib not helping friend"]},
+{question:"Mrittika can solve it.", answer:"Mrittika cannot solve it", options:["Mrittika can solve it","Mrittika cannot solve it","Can Mrittika solve it?","Mrittika not can solve it"]},
+{question:"Maida goes to school daily.", answer:"Maida does not go to school daily", options:["Maida goes to school daily","Maida does not go to school daily","Does Maida go to school daily?","Maida not go to school"]},
+{question:"Hasan Sir is cooking.", answer:"Hasan Sir is not cooking", options:["Hasan Sir is cooking","Hasan Sir is not cooking","Is Hasan Sir cooking?","Hasan Sir not cooking"]},
+{question:"Momo is studying.", answer:"Momo is not studying", options:["Momo is studying","Momo is not studying","Is Momo studying?","Momo not studying"]},
+{question:"Prionti will help her friend.", answer:"Prionti will not help her friend", options:["Prionti will help her friend","Prionti will not help her friend","Will Prionti help her friend?","Prionti not help friend"]},
+{question:"Rahul is writing a story.", answer:"Rahul is not writing a story", options:["Rahul is writing a story","Rahul is not writing a story","Is Rahul writing a story?","Rahul not writing a story"]}
+]
+},
+{
+category:"Tag Questions",
+questions:[
+{question:"Rahul is a good student, ...?", answer:"isn't he?", options:["is he?","isn't he?","does he?","doesn't he?"]},
+{question:"Prionti likes mangoes, ...?", answer:"doesn't she?", options:["does she?","doesn't she?","isn't she?","is she?"]},
+{question:"Hasan Sir is tall, ...?", answer:"isn't he?", options:["is he?","isn't he?","does he?","isn't he?"]},
+{question:"Momo went to market, ...?", answer:"didn't she?", options:["did she?","didn't she?","does she?","didn't she?"]},
+{question:"Ayat is playing football, ...?", answer:"isn't he?", options:["is he?","isn't he?","does he?","isn't he?"]},
+{question:"Sakib is helping his friend, ...?", answer:"isn't he?", options:["is he?","isn't he?","does he?","isn't he?"]},
+{question:"Mrittika can solve it, ...?", answer:"can't she?", options:["can she?","can't she?","does she?","isn't she?"]},
+{question:"Maida likes ice-cream, ...?", answer:"doesn't she?", options:["does she?","doesn't she?","is she?","isn't she?"]},
+{question:"Rahul plays cricket, ...?", answer:"doesn't he?", options:["does he?","doesn't he?","isn't he?","doesn't he?"]},
+{question:"Momo is reading a book, ...?", answer:"isn't she?", options:["is she?","isn't she?","does she?","isn't she?"]},
+{question:"Prionti went to school, ...?", answer:"didn't she?", options:["did she?","didn't she?","does she?","isn't she?"]},
+{question:"Hasan Sir is cooking, ...?", answer:"isn't he?", options:["is he?","isn't he?","does he?","isn't he?"]},
+{question:"Momo likes singing, ...?", answer:"doesn't she?", options:["does she?","doesn't she?","is she?","isn't she?"]},
+{question:"Ayat is doing homework, ...?", answer:"isn't he?", options:["is he?","isn't he?","does he?","isn't he?"]},
+{question:"Sakib can solve the puzzle, ...?", answer:"can't he?", options:["can he?","can't he?","does he?","isn't he?"]},
+{question:"Mrittika is dancing, ...?", answer:"isn't she?", options:["is she?","isn't she?","does she?","isn't she?"]},
+{question:"Maida is singing, ...?", answer:"isn't she?", options:["is she?","isn't she?","does she?","isn't she?"]},
+{question:"Rahul will help a friend, ...?", answer:"won't he?", options:["will he?","won't he?","does he?","isn't he?"]},
+{question:"Momo can swim, ...?", answer:"can't she?", options:["can she?","can't she?","does she?","isn't she?"]}
+]
+},
+{
+category:"Modal Questions",
+questions:[
+{question:"Mrittika ___ play the piano when she was young.", answer:"could", options:["can","could","must","should"]},
+{question:"Ayat ___ finish homework before dinner.", answer:"must", options:["may","must","can","should"]},
+{question:"Sakib ___ solve the puzzle.", answer:"can", options:["can","could","must","should"]},
+{question:"Maida ___ sing beautifully.", answer:"can", options:["may","must","can","should"]},
+{question:"Rahul ___ complete the project on time.", answer:"must", options:["can","could","must","should"]},
+{question:"Momo ___ come to the party.", answer:"may", options:["may","must","can","should"]},
+{question:"Prionti ___ speak English fluently.", answer:"can", options:["may","must","can","should"]},
+{question:"Hasan Sir ___ drive a car.", answer:"can", options:["may","must","can","should"]},
+{question:"Ayat ___ help his friend.", answer:"should", options:["may","must","can","should"]},
+{question:"Sakib ___ bring his books tomorrow.", answer:"must", options:["may","must","can","should"]},
+{question:"Mrittika ___ finish homework on time.", answer:"must", options:["may","must","can","should"]},
+{question:"Maida ___ solve the math problem.", answer:"can", options:["may","must","can","should"]},
+{question:"Rahul ___ read the chapter.", answer:"must", options:["may","must","can","should"]},
+{question:"Momo ___ sing a song.", answer:"can", options:["may","must","can","should"]},
+{question:"Prionti ___ complete the assignment.", answer:"must", options:["may","must","can","should"]},
+{question:"Hasan Sir ___ participate in the competition.", answer:"can", options:["may","must","can","should"]},
+{question:"Ayat ___ join the meeting.", answer:"may", options:["may","must","can","should"]},
+{question:"Sakib ___ write the essay.", answer:"must", options:["may","must","can","should"]},
+{question:"Mrittika ___ play chess.", answer:"can", options:["may","must","can","should"]},
+{question:"Maida ___ finish reading the book.", answer:"must", options:["may","must","can","should"]}
+]
+}
+];
+
+// Login & display
+function showLogin(type){ document.getElementById('loginForm').style.display='block'; document.getElementById('loginForm').dataset.type=type; }
+function login(){
+const username=document.getElementById('username').value;
+const password=document.getElementById('password').value;
+const type=document.getElementById('loginForm').dataset.type;
+if(type==='admin'){
+if(username===adminEmail && password===adminPass){ alert("Admin login successful"); document.getElementById('adminPanel').style.display='block'; document.getElementById('quizSection').style.display='none'; document.getElementById('modalSection').style.display='none'; loadUsers(); loadQuizzes(); }else{ alert("Wrong admin credentials"); }
+}else{
+const student=users.find(u=>u.username===username && u.password===password && u.type==="student");
+if(student){ alert("Student login successful"); document.getElementById('quizSection').style.display='
+(student){
+  alert("Student login successful");
+  document.getElementById('quizSection').style.display='block';
+  document.getElementById('modalSection').style.display='block';
+  document.getElementById('adminPanel').style.display='none';
+  document.getElementById('greeting').textContent="Welcome, "+username+"! Ready to test your English?";
+  shuffleQuizzes();
+  showQuiz();
+  showModalQuestions();
+}else{
+  alert("Wrong student credentials");
+}
+}
+
+// Add student
+function addUser(){
+  const username=document.getElementById('newUser').value;
+  const password=document.getElementById('newPass').value;
+  if(username && password){
+    users.push({username,password,type:"student"});
+    db.collection("students").doc(username).set({password: password});
+    loadUsers();
+    document.getElementById('newUser').value='';
+    document.getElementById('newPass').value='';
+    alert("Student added successfully!");
+  }
+}
+
+function loadUsers(){
+  const list=document.getElementById('userList'); list.innerHTML='';
+  users.forEach((u,i)=>{
+    if(u.type==='student'){
+      const li=document.createElement('li'); li.textContent=u.username+" ";
+      const btn=document.createElement('button'); btn.textContent="Delete";
+      btn.onclick=()=>{ users.splice(i,1); db.collection("students").doc(u.username).delete(); loadUsers(); }
+      li.appendChild(btn); list.appendChild(li);
+    }
+  });
+}
+
+// Quiz display
+function shuffleQuizzes(){
+  quizzes.forEach(cat=>{
+    for(let i=cat.questions.length-1;i>0;i--){
+      let j=Math.floor(Math.random()*(i+1));
+      [cat.questions[i], cat.questions[j]]=[cat.questions[j], cat.questions[i]];
+    }
+  });
+}
+
+function showQuiz(){
+  const container=document.getElementById('quizContainer'); container.innerHTML='';
+  let qNum = 1;
+  quizzes.forEach(cat=>{
+    const h3=document.createElement('h3'); h3.textContent=cat.category; container.appendChild(h3);
+    cat.questions.forEach((q,i)=>{
+      const div=document.createElement('div'); div.className='quiz-question';
+      let optsHTML='';
+      q.options.forEach(opt=>{
+        optsHTML+=`<button class="option-btn" onclick="checkAnswer('${cat.category}',${i},'${opt}')">${opt}</button>`;
+      });
+      div.innerHTML=`<b>Q${qNum}:</b> ${q.question}<br>${optsHTML}<span id="result_${cat.category}_${i}"></span>`;
+      container.appendChild(div);
+      qNum++;
+    });
+  });
+  document.getElementById('scoreDisplay').textContent='';
+}
+
+function checkAnswer(catName,index,selected){
+  const cat=quizzes.find(c=>c.category===catName);
+  const span=document.getElementById(`result_${catName}_${index}`);
+  if(selected===cat.questions[index].answer){
+    span.textContent=" ✅ Correct";
+    span.className='correct';
+  }else{
+    span.textContent=` ❌ Incorrect (Answer: ${cat.questions[index].answer})`;
+    span.className='incorrect';
+  }
+  updateScore();
+}
+
+function updateScore(){
+  let total=0, correctCount=0;
+  quizzes.forEach(cat=>{
+    cat.questions.forEach((q,i)=>{
+      const span=document.getElementById(`result_${cat.category}_${i}`);
+      if(span && span.className==='correct') correctCount++;
+      total++;
+    });
+  });
+  document.getElementById('scoreDisplay').textContent=`Score: ${correctCount} / ${total}`;
+}
+
+// Add quiz
+function addQuizQuestion(){
+  const qText=document.getElementById('newQuestionText').value;
+  const qAnswer=document.getElementById('newQuestionAnswer').value;
+  const qCat=document.getElementById('newQuestionCategory').value;
+  const qOpts=[
+    document.getElementById('newOption1').value,
+    document.getElementById('newOption2').value,
+    document.getElementById('newOption3').value,
+    document.getElementById('newOption4').value
+  ];
+  if(qText && qAnswer && qOpts.every(o=>o)){
+    const cat=quizzes.find(c=>c.category===qCat);
+    cat.questions.push({question:qText, answer:qAnswer, options:qOpts});
+    loadQuizzes();
+    document.getElementById('newQuestionText').value='';
+    document.getElementById('newQuestionAnswer').value='';
+    document.getElementById('newOption1').value='';
+    document.getElementById('newOption2').value='';
+    document.getElementById('newOption3').value='';
+    document.getElementById('newOption4').value='';
+    alert("Quiz added");
+  }
+}
+
+function loadQuizzes(){
+  const list=document.getElementById('quizList'); list.innerHTML='';
+  quizzes.forEach(cat=>{
+    const li=document.createElement('li'); li.textContent=cat.category+" ("+cat.questions.length+" questions)";
+    list.appendChild(li);
+  });
+}
+
+// Modal Questions display (25 questions)
+function showModalQuestions(){
+  const container=document.getElementById('modalContainer'); container.innerHTML='';
+  const modalQs = [
+    {question:"Rahul should ___ submit the assignment.", answer:"must"},
+    {question:"Momo could ___ solve the puzzle.", answer:"could"},
+    {question:"Prionti may ___ join the class late.", answer:"may"},
+    {question:"Ayat should ___ complete homework.", answer:"must"},
+    {question:"Sakib can ___ answer all questions.", answer:"can"},
+    {question:"Mrittika may ___ attend the meeting.", answer:"may"},
+    {question:"Maida should ___ practice singing.", answer:"should"},
+    {question:"Hasan Sir could ___ teach us grammar.", answer:"could"},
+    {question:"Momo should ___ bring her notebook.", answer:"should"},
+    {question:"Rahul can ___ help his friends.", answer:"can"},
+    {question:"Prionti must ___ finish reading.", answer:"must"},
+    {question:"Ayat may ___ participate in the contest.", answer:"may"},
+    {question:"Sakib should ___ complete the project.", answer:"should"},
+    {question:"Mrittika can ___ solve puzzles.", answer:"can"},
+    {question:"Maida must ___ submit the assignment.", answer:"must"},
+    {question:"Hasan Sir may ___ join the seminar.", answer:"may"},
+    {question:"Momo could ___ win the competition.", answer:"could"},
+    {question:"Rahul should ___ revise lessons.", answer:"should"},
+    {question:"Prionti can ___ answer questions quickly.", answer:"can"},
+    {question:"Ayat must ___ submit homework on time.", answer:"must"},
+    {question:"Sakib may ___ attend the class.", answer:"may"},
+    {question:"Mrittika should ___ practice daily.", answer:"should"},
+    {question:"Maida can ___ complete the exercise.", answer:"can"},
+    {question:"Hasan Sir must ___ explain the lesson.", answer:"must"},
+    {question:"Momo may ___ ask questions.", answer:"may"}
+  ];
+  modalQs.forEach((q,i)=>{
+    const div=document.createElement('div'); div.className='modal-question';
+    div.innerHTML=`<b>Q${i+1}:</b> ${q.question} <br> Answer: ${q.answer}`;
+    container.appendChild(div);
+  });
+}
+
+// Gemini AI
+async function askGemini(){
+  const question=document.getElementById('aiQuestion').value;
+  if(!question){ alert("Type a question!"); return; }
+  document.getElementById('aiAnswer').textContent="Thinking...";
+  try{
+    const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent", {
+      method:"POST",
+      headers: {
+        "Content-Type":"application/json",
+        "x-goog-api-key": GEMINI_API_KEY
+      },
+      body: JSON.stringify({
+        contents:[{parts:[{text:question}]}]
+      })
+    });
+    const data = await response.json();
+    document.getElementById('aiAnswer').textContent = data.candidates[0].content[0].text || "No response";
+  }catch(e){ document.getElementById('aiAnswer').textContent="Error calling AI"; console.error(e); }
+}
+
+// Change password
+function changePassword(){
+  const newPass = document.getElementById('newStudentPass').value;
+  const username = document.getElementById('username').value;
+  const student = users.find(u => u.username === username && u.type==="student");
+  if(student && newPass){
+    student.password = newPass;
+    db.collection("students").doc(username).set({password:newPass},{merge:true})
+    .then(()=>{ 
+      document.getElementById('passChangeMsg').textContent="Password updated in Firebase!";
+      document.getElementById('newStudentPass').value='';
+      alert("Password changed successfully!");
+    })
+    .catch(err=>{ document.getElementById('passChangeMsg').textContent="Error updating password in Firebase"; console.error(err); });
+  }else{
+    document.getElementById('passChangeMsg').textContent="Error updating password.";
+  }
+}
+</script>
+</body>
+  </html>
